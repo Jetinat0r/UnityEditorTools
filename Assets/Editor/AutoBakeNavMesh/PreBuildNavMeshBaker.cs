@@ -13,20 +13,22 @@ class PreBuildNavMeshBaker : IPreprocessBuildWithReport
     {
         Debug.Log("PreBuildNavMeshBaker.OnPreprocessBuild for target " + _report.summary.platform + " at path " + _report.summary.outputPath);
         
-        string[] _prefabs = AssetDatabase.FindAssets("t:prefab");
-        foreach (string _prefab in _prefabs)
+        string[] _allPrefabPaths = AssetDatabase.FindAssets("t:prefab");
+        foreach (string _prefabGuids in _allPrefabPaths)
         {
-            Debug.Log($"Prefab Path: {_prefab}");
+            Debug.Log($"Opening Prefab: {_prefabGuids}");
+            string _prefabPath = AssetDatabase.GUIDToAssetPath(_prefabGuids);
+            GameObject _prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_prefabPath);
+
+            Debug.Log($"Prefab: {_prefab.name}");
         }
 
         Scene _activeScene = EditorSceneManager.GetActiveScene();
+        Debug.LogWarning(_activeScene.name);
 
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
         {
             throw new BuildFailedException("Couldn't build navmeshes, user cancelled saving operation!");
-        }
-        else
-        {
         }
 
         /*
