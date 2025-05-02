@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -13,68 +15,90 @@ class PreBuildNavMeshBaker : IPreprocessBuildWithReport
     {
         Debug.Log("PreBuildNavMeshBaker.OnPreprocessBuild for target " + _report.summary.platform + " at path " + _report.summary.outputPath);
         
-        string[] _allPrefabPaths = AssetDatabase.FindAssets("t:prefab");
-        foreach (string _prefabGuids in _allPrefabPaths)
-        {
-            Debug.Log($"Opening Prefab: {_prefabGuids}");
-            string _prefabPath = AssetDatabase.GUIDToAssetPath(_prefabGuids);
-            GameObject _prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_prefabPath);
-
-            Debug.Log($"Prefab: {_prefab.name}");
-        }
-
         Scene _activeScene = EditorSceneManager.GetActiveScene();
-        Debug.LogWarning(_activeScene.name);
-
+        string _activeScenePath = _activeScene.path;
+        //We run this first because it is the last chance to canel these actions
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
         {
             throw new BuildFailedException("Couldn't build navmeshes, user cancelled saving operation!");
         }
 
-        /*
-        if(!EditorSceneManager.CloseScene(_activeScene, false))
+        /* Prefabs; disabled bc they're broken
+         * TODO: Fix
+        string[] _allPrefabPaths = AssetDatabase.FindAssets("t:prefab");
+        foreach (string _prefabGuids in _allPrefabPaths)
         {
-            throw new BuildFailedException($"Couldn't close active scene!");
+            string _prefabPath = AssetDatabase.GUIDToAssetPath(_prefabGuids);
+            GameObject _prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_prefabPath);
+
+            int _numNavMeshesBuilt = BuildNavMeshes(_prefab, true);
+            Debug.Log($"Built {_numNavMeshesBuilt} in Prefab {_prefab.name} ({_prefabPath})");
         }
         */
 
-        foreach(EditorBuildSettingsScene _scene in EditorBuildSettings.scenes)
+
+        foreach(EditorBuildSettingsScene _sceneInfo in EditorBuildSettings.scenes)
         {
             //Ignore scenes not in build
-            if (_scene.enabled)
+            if (_sceneInfo.enabled)
             {
-                if(_activeScene.path == _scene.path)
-                {
-                    Debug.Log("Hit duplicate scene!");
-
-                    foreach (GameObject _obj in _activeScene.GetRootGameObjects())
-                    {
-                        Debug.Log($"Object: {_obj}");
-                    }
-
-                    return;
-                }
-                Debug.Log($"Loading Scene: {_scene.path}");
-                Scene _newScene = EditorSceneManager.OpenScene(_scene.path, OpenSceneMode.AdditiveWithoutLoading);
+                Scene _newScene = EditorSceneManager.OpenScene(_sceneInfo.path, OpenSceneMode.Single);
                 
-                foreach(GameObject _obj in _newScene.GetRootGameObjects())
-                {
-                    Debug.Log($"Object: {_obj}");
-                }
+                int _numNavMeshesBuilt = BuildNavMeshes(_newScene.GetRootGameObjects(), true);
+                Debug.Log($"Built {_numNavMeshesBuilt} navmeshes in Scene {_newScene.name}");
 
-                if(EditorSceneManager.CloseScene(_newScene, false))
+                if (!EditorSceneManager.SaveScene(_newScene))
                 {
-                    Debug.Log("Successfully closed scene!");
-                }
-                else
-                {
-                    Debug.Log("Couldn't close scene!");
+                    Debug.LogError($"Couldn't save changes to {_newScene.name} ({_newScene.path}");
                 }
             }
-
-            
         }
 
-        
+        //Reopen initial active scene
+        Scene _reOpenedInitialScene = EditorSceneManager.OpenScene(_activeScenePath, OpenSceneMode.Single);
+        if (!_reOpenedInitialScene.IsValid())
+        {
+            Debug.LogWarning($"Couldn't reopen initial active scene!");
+        }
+    }
+
+    public NavMeshSurface[] FindNavMeshSurfaces(GameObject _rootGameObject, bool _includeInactiveChildren)
+    {
+        return _rootGameObject.GetComponentsInChildren<NavMeshSurface>(_includeInactiveChildren);
+    }
+
+    public NavMeshSurface[] FindNavMeshSurfaces(GameObject[] _rootGameObjects, bool _includeInactiveChildren)
+    {
+        List<NavMeshSurface> _navMeshSurfaces = new();
+        foreach(GameObject _rootGameObject in _rootGameObjects)
+        {
+            _navMeshSurfaces.AddRange(FindNavMeshSurfaces(_rootGameObject, _includeInactiveChildren));
+        }
+
+        return _navMeshSurfaces.ToArray();
+    }
+
+    public int BuildNavMeshes(NavMeshSurface[] _navMeshSurfaces)
+    {
+        int _numNavMeshesBuilt = 0;
+        foreach (NavMeshSurface _navMeshSurface in _navMeshSurfaces)
+        {
+            _navMeshSurface.BuildNavMesh();
+            _numNavMeshesBuilt++;
+        }
+
+        return _numNavMeshesBuilt;
+    }
+
+    public int BuildNavMeshes(GameObject _rootGameObject, bool _includeInactiveChildren)
+    {
+        NavMeshSurface[] _navMeshSurfaces = FindNavMeshSurfaces(_rootGameObject, _includeInactiveChildren);
+        return BuildNavMeshes(_navMeshSurfaces);
+    }
+
+    public int BuildNavMeshes(GameObject[] _rootGameObjects, bool _includeInactiveChildren)
+    {
+        NavMeshSurface[] _navMeshSurfaces = FindNavMeshSurfaces(_rootGameObjects, _includeInactiveChildren);
+        return BuildNavMeshes(_navMeshSurfaces);
     }
 }
