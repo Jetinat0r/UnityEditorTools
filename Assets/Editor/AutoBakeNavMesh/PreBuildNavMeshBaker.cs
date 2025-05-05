@@ -7,10 +7,16 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 using Unity.AI.Navigation;
-using Unity.AI.Navigation.Editor;
-using UnityEngine.AI;
-using System.Threading;
 using System.IO;
+
+/*TODO: Settings:
+ * Bake Inactive Children
+ * Bake Scenes
+ * - Bake prefab instances (likely dangerous)
+ *  - Don't bake prefab instances if they already have a bake
+ * Bake Prefabs
+ * - Force bake into folder (like scenes)
+ */
 
 class PreBuildNavMeshBaker : IPreprocessBuildWithReport
 {
@@ -74,36 +80,35 @@ class PreBuildNavMeshBaker : IPreprocessBuildWithReport
 
             //return;
 
-            /*
+            
             
             //Scene _prefabScene = EditorSceneManager.NewPreviewScene();
             //Scene _prefabScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             //StageUtility.GoToStage(_prefabScene, false);
-            string _prefabPath = AssetDatabase.GUIDToAssetPath(_prefabGuid);
-            GameObject _prefab = PrefabUtility.LoadPrefabContents(_prefabPath);
+            //string _prefabPath = AssetDatabase.GUIDToAssetPath(_prefabGuid);
+            GameObject _prefab = PrefabUtility.LoadPrefabContents(_prefabAssetPath);
             //PrefabUtility.LoadPrefabContentsIntoPreviewScene(_prefabPath, _prefabScene);
-            Stage _prefabStage = StageUtility.GetStage(_prefab);
-            StageUtility.GoToStage(_prefabStage, false);
+            //Stage _prefabStage = StageUtility.GetStage(_prefab);
+            //StageUtility.GoToStage(_prefabStage, false);
             //GameObject _prefab = _prefabScene.GetRootGameObjects()[0];
 
             //Scene _prefabScene = EditorSceneManager.OpenScene(_prefab.scene.path, OpenSceneMode.Single);
             //GameObject _prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_prefabPath);
             //GameObject _prefab = AssetDatabase.LoadAssetAtPath<GameObject>(_prefabPath);
-            Debug.Log($"Loaded prefab into: {_prefab.scene.name}");
+            //Debug.Log($"Loaded prefab into: {_prefab.scene.name}");
 
-            int _numNavMeshesBuilt = BuildNavMeshes(_prefab, true);
-            Debug.Log($"Built {_numNavMeshesBuilt} in Prefab {_prefab.name} ({_prefabPath})");
-            GameObject _new = new();
-            _new.transform.SetParent(_prefab.transform);
+            int _numNavMeshesBuilt = BuildNavMeshes(_prefabAssetPath, _prefab, true);
+            Debug.Log($"Built {_numNavMeshesBuilt} in Prefab {_prefab.name} ({_prefabAssetPath})");
+            
             //Save nav mesh to prefab
-            PrefabUtility.SavePrefabAsset(_prefab, out bool _savedSuccessfully);
+            PrefabUtility.SaveAsPrefabAsset(_prefab, _prefabAssetPath, out bool _savedSuccessfully);
             //PrefabUtility.SaveAsPrefabAsset(_prefab, _prefabPath, out bool _savedSuccessfully);
             if (!_savedSuccessfully)
             {
-                Debug.LogError($"Failed to save changes to prefab {_prefab.name} ({_prefabPath})");
+                Debug.LogError($"Failed to save changes to prefab {_prefab.name} ({_prefabAssetPath})");
             }
             
-            */
+            
 
             //Clean up memory
             //PrefabUtility.UnloadPrefabContents(_prefab);
@@ -177,7 +182,7 @@ class PreBuildNavMeshBaker : IPreprocessBuildWithReport
                 if(_assetExtension.ToLower() == ".prefab")
                 {
                     //If we're a prefab, we don't put this in a folder
-                    _navMeshDataPath = _assetFolder + $"NavMesh-";
+                    _navMeshDataPath = _assetFolder + $"/NavMesh-";
                 }
                 else
                 {
