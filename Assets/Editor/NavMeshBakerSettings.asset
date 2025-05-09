@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e158a13193c94404da8bee95f3cba1ce, type: 3}
+  m_Name: NavMeshBakerSettings
+  m_EditorClassIdentifier: 
+  BakeOnBuild: 1
+  BakeScenesOnFullBuild: 1
+  BakePrefabsOnFullBuild: 1
+  OnlyBakeMissingNavMeshes: 0
+  StopBakeOnAssetSaveFailure: 1
+  BakeNavMeshSurfacesOnInactiveObjects: 0
+  BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive: 1
+  BakeInactiveNavMeshSurfaceComponents: 0
+  BakeOnlyBuildListScenes: 1
+  BakeOnlyEnabledBuildListScenes: 1
+  BakePrefabInstancesInScenes: 0
+  OverrideExistingPrefabInstanceBakesInScenes: 1
+  ForcePrefabBakeIntoFolder: 1
+  IgnoreNavMeshSurfacesInPrefabInstancesInPrefabs: 1

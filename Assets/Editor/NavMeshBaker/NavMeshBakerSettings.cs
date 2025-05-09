@@ -1,4 +1,9 @@
-public class NavMeshBakerSettings
+using System.Collections.Generic;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+public class NavMeshBakerSettings : ScriptableObject
 {
     //Constant string keys to access NavMeshBaker's settings in ProjectPreferences
     public static class StringIdentifiers
@@ -86,49 +91,207 @@ public class NavMeshBakerSettings
         public const bool IGNORE_NAV_MESH_SURFACES_IN_PREFAB_INSTANCES_IN_PREFABS = true;
     }
 
-    //Whether or not to bake NavMeshes on Build
+    //Constant path for saved settings asset
+    public const string NAV_MESH_BAKER_SETTINGS_PATH = "Assets/Editor/NavMeshBakerSettings.asset";
+
+    [Tooltip("Whether or not to bake NavMeshes on Build")]
     public bool BakeOnBuild = Defaults.BAKE_ON_BUILD;
-    //Whether or not to bake NavMeshSurfaces in scenes on full build (and prebuild)
+    [Tooltip("Whether or not to bake NavMeshSurfaces in scenes on full build (and prebuild)")]
     public bool BakeScenesOnFullBuild = Defaults.BAKE_SCENES_ON_FULL_BUILD;
-    //Whether or not to bake NavMeshSurfaces in prefabs on full build (and prebuild)
+    [Tooltip("Whether or not to bake NavMeshSurfaces in prefabs on full build (and prebuild)")]
     public bool BakePrefabsOnFullBuild = Defaults.BAKE_PREFABS_ON_FULL_BUILD;
 
-    //Whether or not to only bake for NavMeshSurfaces that don't have an associated NavMesh
+    [Tooltip("Whether or not to only bake for NavMeshSurfaces that don't have an associated NavMesh")]
     public bool OnlyBakeMissingNavMeshes = Defaults.ONLY_BAKE_MISSING_NAV_MESHES;
 
-    //Stops baking operations as soon as any object fails to save
+    [Tooltip("Stops baking operations as soon as any object fails to save")]
     public bool StopBakeOnAssetSaveFailure = Defaults.STOP_BAKE_ON_ASSET_SAVE_FAILURE;
 
-    //Whether or not the bake nav mesh surfaces if they are disabled
+    [Tooltip("Whether or not the bake nav mesh surfaces if they are disabled")]
     public bool BakeNavMeshSurfacesOnInactiveObjects = Defaults.BAKE_NAV_MESH_SURFACES_ON_INACTIVE_OBJECTS;
-    //Override applied only if BakeNavMeshSurfacesInInactiveObjects is true to bake a surface if it is enabled and its parent is not
+    [Tooltip("Override applied only if BakeNavMeshSurfacesInInactiveObjects is true to bake a surface if it is enabled and its parent is not")]
     public bool BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive = Defaults.BAKE_NAV_MESH_SURFACES_ON_INACTIVE_OBJECTS_IF_SELF_IS_ACTIVE;
 
-    //Whether or not to bake disabled NavMeshSurface components
-    //  Independent of object whether or not the GameObject it is attached to is enabled
+    [Tooltip("Whether or not to bake disabled NavMeshSurface components\n" +
+                "Independent of object whether or not the GameObject it is attached to is enabled")]
     public bool BakeInactiveNavMeshSurfaceComponents = Defaults.BAKE_INACTIVE_NAV_MESH_SURFACE_COMPONENTS;
 
-    //Bake only scenes in the build list or every scene
+    [Tooltip("Bake only scenes in the build list or every scene")]
     public bool BakeOnlyBuildListScenes = Defaults.BAKE_ONLY_BUILD_LIST_SCENES;
-    //When only baking build list scenes, whether or not to ignore disabled scenes in the list
+    [Tooltip("When only baking build list scenes, whether or not to ignore disabled scenes in the list")]
     public bool BakeOnlyEnabledBuildListScenes = Defaults.BAKE_ONLY_ENABLED_BUILD_LIST_SCENES;
 
-    //Whether or not to bake prefab instances within scenes
+    [Tooltip("Whether or not to bake prefab instances within scenes")]
     public bool BakePrefabInstancesInScenes = Defaults.BAKE_PREFAB_INSTANCES_IN_SCENES;
-    //If baking prefab instances in scenes, whether or not to replace a bake if it already has one
-    //  Ignored if OnlyBakeMissingNavMeshes is true
+    [Tooltip("If baking prefab instances in scenes, whether or not to replace a bake if it already has one\n" +
+                "Ignored if OnlyBakeMissingNavMeshes is true")]
     public bool OverrideExistingPrefabInstanceBakesInScenes = Defaults.OVERRIDE_EXISTING_PREFAB_INSTANCE_BAKES_IN_SCENES;
 
-    //Makes prefab bakes behave like scenes, where baked NavMeshes are placed inside a folder next to the prefab
-    //  Ignored if the prefab's NavMeshes already have bakes
+    [Tooltip("Makes prefab bakes behave like scenes, where baked NavMeshes are placed inside a folder next to the prefab\n" +
+                "Ignored if the prefab's NavMeshes already have bakes")]
     public bool ForcePrefabBakeIntoFolder = Defaults.FORCE_PREFAB_BAKE_INTO_FOLDER;
-    //Whether or not to ignore NavMeshSurfaces in prefab instances nested inside prefabs
+    [Tooltip("Whether or not to ignore NavMeshSurfaces in prefab instances nested inside prefabs")]
     public bool IgnoreNavMeshSurfacesInPrefabInstancesInPrefabs = Defaults.IGNORE_NAV_MESH_SURFACES_IN_PREFAB_INSTANCES_IN_PREFABS;
 
-    public static NavMeshBakerSettings GetProjectSettings()
+    public static NavMeshBakerSettings GetOrCreateSettings()
     {
-        NavMeshBakerSettings _projectSettings = new NavMeshBakerSettings();
+        NavMeshBakerSettings _settings = AssetDatabase.LoadAssetAtPath<NavMeshBakerSettings>(NAV_MESH_BAKER_SETTINGS_PATH);
+        if(_settings == null)
+        {
+            _settings = CreateInstance<NavMeshBakerSettings>();
+            AssetDatabase.CreateAsset(_settings, NAV_MESH_BAKER_SETTINGS_PATH);
+            AssetDatabase.SaveAssets();
+        }
 
-        return _projectSettings;
+        return _settings;
+    }
+
+    //If _writeAsset is true: Forcefully overwrites any existing settings object with a brand new default one to NAV_MESH_BAKER_SETTINGS_PATH
+    public static NavMeshBakerSettings CreateSettings(bool _writeAsset = false)
+    {
+        NavMeshBakerSettings _settings = CreateInstance<NavMeshBakerSettings>();
+        if (_writeAsset)
+        {
+            AssetDatabase.CreateAsset(_settings, NAV_MESH_BAKER_SETTINGS_PATH);
+            AssetDatabase.SaveAssets();
+        }
+
+        return _settings;
+    }
+
+    public static SerializedObject GetOrCreateSerializedSettings()
+    {
+        return new SerializedObject(GetOrCreateSettings());
+    }
+
+    //If _writeAsset is true: Forcefully overwrites any existing settings object with a brand new default one to NAV_MESH_BAKER_SETTINGS_PATH
+    public static SerializedObject CreateNewSerializedSettings(bool _writeAsset = false)
+    {
+        return new SerializedObject(CreateSettings(_writeAsset));
+    }
+
+    //Resets the settings on the passed in instance of the settings
+    public void ResetToDefaults()
+    {
+        //Reset all settings!
+        //  Might be simpler to just make a new object,
+        //  but we love options and it might hurt when changing existing saved assets
+        BakeOnBuild = Defaults.BAKE_ON_BUILD;
+        BakeScenesOnFullBuild = Defaults.BAKE_SCENES_ON_FULL_BUILD;
+        BakePrefabsOnFullBuild = Defaults.BAKE_PREFABS_ON_FULL_BUILD;
+
+        OnlyBakeMissingNavMeshes = Defaults.ONLY_BAKE_MISSING_NAV_MESHES;
+
+        StopBakeOnAssetSaveFailure = Defaults.STOP_BAKE_ON_ASSET_SAVE_FAILURE;
+
+        BakeNavMeshSurfacesOnInactiveObjects = Defaults.BAKE_NAV_MESH_SURFACES_ON_INACTIVE_OBJECTS;
+        BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive = Defaults.BAKE_NAV_MESH_SURFACES_ON_INACTIVE_OBJECTS_IF_SELF_IS_ACTIVE;
+        
+        BakeInactiveNavMeshSurfaceComponents = Defaults.BAKE_INACTIVE_NAV_MESH_SURFACE_COMPONENTS;
+
+        BakeOnlyBuildListScenes = Defaults.BAKE_ONLY_BUILD_LIST_SCENES;
+        BakeOnlyEnabledBuildListScenes = Defaults.BAKE_ONLY_ENABLED_BUILD_LIST_SCENES;
+
+        BakePrefabInstancesInScenes = Defaults.BAKE_PREFAB_INSTANCES_IN_SCENES;
+        OverrideExistingPrefabInstanceBakesInScenes = Defaults.OVERRIDE_EXISTING_PREFAB_INSTANCE_BAKES_IN_SCENES;
+
+        ForcePrefabBakeIntoFolder = Defaults.FORCE_PREFAB_BAKE_INTO_FOLDER;
+        IgnoreNavMeshSurfacesInPrefabInstancesInPrefabs = Defaults.IGNORE_NAV_MESH_SURFACES_IN_PREFAB_INSTANCES_IN_PREFABS;
+    }
+}
+
+public class NavMeshBakerSettingsProvider : SettingsProvider
+{
+    public SerializedObject navMeshBakerSettings;
+
+    public NavMeshBakerSettingsProvider(string path, SettingsScope scope = SettingsScope.Project, IEnumerable<string> keywords = null) : base(path, scope, keywords) { }
+
+    public override void OnActivate(string searchContext, VisualElement rootElement)
+    {
+        navMeshBakerSettings = NavMeshBakerSettings.GetOrCreateSerializedSettings();
+    }
+
+    public override void OnGUI(string searchContext)
+    {
+        float _oldLabelWidth = EditorGUIUtility.labelWidth;
+        EditorGUIUtility.labelWidth = 384;
+
+        EditorGUILayout.LabelField("General Settings", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.ONLY_BAKE_MISSING_NAV_MESHES));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_NAV_MESH_SURFACES_ON_INACTIVE_OBJECTS));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_NAV_MESH_SURFACES_ON_INACTIVE_OBJECTS_IF_SELF_IS_ACTIVE));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_INACTIVE_NAV_MESH_SURFACE_COMPONENTS));
+        EditorGUILayout.Space();
+        EditorGUILayout.Space();
+
+        EditorGUILayout.LabelField("Build Settings", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_ON_BUILD));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.STOP_BAKE_ON_ASSET_SAVE_FAILURE));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_SCENES_ON_FULL_BUILD));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_PREFABS_ON_FULL_BUILD));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_ONLY_BUILD_LIST_SCENES));
+        if (navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_ONLY_BUILD_LIST_SCENES).boolValue)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_ONLY_ENABLED_BUILD_LIST_SCENES));
+            EditorGUI.indentLevel--;
+        }
+        EditorGUILayout.Space();
+        EditorGUILayout.Space();
+
+        EditorGUILayout.LabelField("Prefab Settings", EditorStyles.boldLabel);
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_PREFAB_INSTANCES_IN_SCENES));
+        if (navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.BAKE_PREFAB_INSTANCES_IN_SCENES).boolValue)
+        {
+            EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.OVERRIDE_EXISTING_PREFAB_INSTANCE_BAKES_IN_SCENES));
+            EditorGUI.indentLevel--;
+        }
+
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.FORCE_PREFAB_BAKE_INTO_FOLDER));
+        EditorGUILayout.PropertyField(navMeshBakerSettings.FindProperty(NavMeshBakerSettings.StringIdentifiers.IGNORE_NAV_MESH_SURFACES_IN_PREFAB_INSTANCES_IN_PREFABS));
+        EditorGUILayout.Space();
+        EditorGUILayout.Space();
+
+        EditorGUILayout.LabelField("Bake Nav Meshes", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        if(GUILayout.Button("Bake Scenes"))
+        {
+
+        }
+        if (GUILayout.Button("Bake Prefabs"))
+        {
+
+        }
+        EditorGUILayout.EndHorizontal();
+        if (GUILayout.Button("Bake All"))
+        {
+
+        }
+        EditorGUILayout.Space();
+        EditorGUILayout.Space();
+
+        Color _oldColor = GUI.color;
+        Color _oldBackgroundColor = GUI.backgroundColor;
+        GUI.color = new Color(248 / 255f, 81 / 255f, 73 / 255f);
+        EditorGUILayout.LabelField("DANGER ZONE", EditorStyles.boldLabel);
+        GUI.color = _oldColor;
+
+        GUI.backgroundColor = Color.red;
+        if (GUILayout.Button("Reset Settings"))
+        {
+            navMeshBakerSettings = NavMeshBakerSettings.CreateNewSerializedSettings(true);
+        }
+        GUI.backgroundColor = _oldBackgroundColor;
+
+        EditorGUIUtility.labelWidth = _oldLabelWidth;
+
+        navMeshBakerSettings.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    [SettingsProvider]
+    public static SettingsProvider CreateNavMeshBakerSettingsProvider()
+    {
+        return new NavMeshBakerSettingsProvider("Project/NavMeshBaker", SettingsScope.Project);
     }
 }

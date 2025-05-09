@@ -1,14 +1,12 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
-public class GlobalNavMeshBakerWindow : EditorWindow
+public class NavMeshBakerWindow : EditorWindow
 {
     [MenuItem("Tools/GlobalNavMeshBakerWindow")]
     public static void ShowWindow()
     {
-        GetWindow<GlobalNavMeshBakerWindow>("GlobalNavMeshBakerWindow");
+        GetWindow<NavMeshBakerWindow>("GlobalNavMeshBakerWindow");
     }
 
     private void OnGUI()

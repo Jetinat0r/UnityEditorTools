@@ -17,6 +17,4 @@ class PreBuildNavMeshBaker : IPreprocessBuildWithReport
             throw new BuildFailedException(_errorMsg);
         }
     }
-
-    
 }
