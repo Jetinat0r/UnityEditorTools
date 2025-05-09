@@ -7,16 +7,6 @@ using UnityEngine.SceneManagement;
 using Unity.AI.Navigation;
 using System.IO;
 
-//TODO: Setting: stop on failed save
-/*TODO: Settings:
- * Bake Inactive Children
- * Bake Scenes
- * - Bake prefab instances (likely dangerous)
- *  - Don't bake prefab instances if they already have a bake
- * Bake Prefabs
- * - Force bake into folder (like scenes)
- */
-
 public static class NavMeshBaker
 {
     public static bool BakeAll(NavMeshBakerSettings _settings, out string _errorMsg)
@@ -145,7 +135,7 @@ public static class NavMeshBaker
 
     public static NavMeshSurface[] FindNavMeshSurfaces(NavMeshBakerSettings _settings, GameObject _rootGameObject)
     {
-        return _rootGameObject.GetComponentsInChildren<NavMeshSurface>(_settings.BakeNavMeshSurfacesInInactiveObjects);
+        return _rootGameObject.GetComponentsInChildren<NavMeshSurface>();
     }
 
     public static NavMeshSurface[] FindNavMeshSurfaces(NavMeshBakerSettings _settings, GameObject[] _rootGameObjects)
