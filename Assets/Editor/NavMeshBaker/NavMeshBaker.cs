@@ -67,7 +67,7 @@ public static class NavMeshBaker
             }
             else
             {
-                if (!BakeAllScenes(_settings, out string _buildScenesErrorMsg))
+                if (!BakeAllAssetScenes(_settings, out string _buildScenesErrorMsg))
                 {
                     Debug.LogError($"[NavMeshBaker] Failed to Bake All Scenes: {_buildScenesErrorMsg}");
 
@@ -82,6 +82,57 @@ public static class NavMeshBaker
         else
         {
             Debug.Log("[NavMeshBaker] Skipped Scenes in Full Bake");
+        }
+
+        //Reopen initial active scene
+        Scene _reOpenedInitialScene = EditorSceneManager.OpenScene(_activeScenePath, OpenSceneMode.Single);
+        if (!_reOpenedInitialScene.IsValid())
+        {
+            Debug.LogWarning($"[NavMeshBaker] Couldn't reopen initial active scene!");
+        }
+
+        return true;
+    }
+
+    public static bool BakeAllScenes(NavMeshBakerSettings _settings, out string _errorMsg)
+    {
+        _errorMsg = "";
+
+        Scene _activeScene = EditorSceneManager.GetActiveScene();
+        string _activeScenePath = _activeScene.path;
+        //We run this first because it is the last chance to canel these actions
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+        {
+            Debug.LogError("[NavMeshBaker] Couldn't build navmeshes, user cancelled saving operation");
+            _errorMsg = "Couldn't build navmeshes, user cancelled saving operation";
+            return false;
+        }
+
+        if (_settings.BakeOnlyBuildListScenes)
+        {
+            if (!BakeBuildScenes(_settings, out string _buildScenesErrorMsg))
+            {
+                Debug.LogError($"[NavMeshBaker] Failed to Bake Build Scenes: {_buildScenesErrorMsg}");
+
+                if (_settings.StopBakeOnError)
+                {
+                    _errorMsg = $"Failed to Bake Build Scenes: {_buildScenesErrorMsg}";
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            if (!BakeAllAssetScenes(_settings, out string _buildScenesErrorMsg))
+            {
+                Debug.LogError($"[NavMeshBaker] Failed to Bake All Scenes: {_buildScenesErrorMsg}");
+
+                if (_settings.StopBakeOnError)
+                {
+                    _errorMsg = $"Failed to Bake All Scenes: {_buildScenesErrorMsg}";
+                    return false;
+                }
+            }
         }
 
         //Reopen initial active scene
@@ -120,11 +171,31 @@ public static class NavMeshBaker
         return true;
     }
 
-    public static bool BakeAllScenes(NavMeshBakerSettings _settings, out string _errorMsg)
+    //Tries to find and bake Nav Meshes for every .scene file in the project
+    public static bool BakeAllAssetScenes(NavMeshBakerSettings _settings, out string _errorMsg)
     {
         _errorMsg = string.Empty;
-        //TODO: This
-        //Get the list, then call BakeScenes(...)
+
+        //Bake meshes for prefabs
+        string[] _allSceneGuids = AssetDatabase.FindAssets("t:scene");
+        string[] _allScenePaths = new string[_allSceneGuids.Length];
+
+        for(int i = 0; i < _allSceneGuids.Length; i++)
+        {
+            _allScenePaths[i] = AssetDatabase.GUIDToAssetPath(_allSceneGuids[i]);
+        }
+
+        if(!BakeScenes(_settings, _allScenePaths, out _errorMsg))
+        {
+            Debug.LogError($"[NavMeshBaker] Failed to bake all scenes: {_errorMsg}");
+
+            if (_settings.StopBakeOnError)
+            {
+                _errorMsg = $"Failed to bake all scenes: {_errorMsg}";
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -183,8 +254,8 @@ public static class NavMeshBaker
         _errorMsg = string.Empty;
 
         //Bake meshes for prefabs
-        string[] _allPrefabPaths = AssetDatabase.FindAssets("t:prefab");
-        foreach (string _prefabGuid in _allPrefabPaths)
+        string[] _allPrefabGuids = AssetDatabase.FindAssets("t:prefab");
+        foreach (string _prefabGuid in _allPrefabGuids)
         {
             string _prefabAssetPath = AssetDatabase.GUIDToAssetPath(_prefabGuid);
             GameObject _prefab = PrefabUtility.LoadPrefabContents(_prefabAssetPath);

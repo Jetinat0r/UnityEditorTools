@@ -15,7 +15,7 @@ MonoBehaviour:
   BakeOnBuild: 1
   BakeScenesOnFullBake: 1
   BakePrefabsOnFullBake: 1
-  OnlyBakeMissingNavMeshes: 1
+  OnlyBakeMissingNavMeshes: 0
   StopBakeOnError: 1
   BakeNavMeshSurfacesOnInactiveObjects: 0
   BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive: 1
