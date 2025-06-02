@@ -336,7 +336,6 @@ public static class NavMeshBaker
                 }
             }
 
-            if(_isPartOfPrefabInstance && !_isPartOfPrefabInstance)
             //Bake our breand new navmesh!
             _navMeshSurface.BuildNavMesh();
 
