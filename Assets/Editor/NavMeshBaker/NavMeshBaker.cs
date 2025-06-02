@@ -3,14 +3,21 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-
 using Unity.AI.Navigation;
 using System.IO;
 
 public static class NavMeshBaker
 {
-    public static bool BakeAll(NavMeshBakerSettings _settings, out string _errorMsg)
+    //Bakes all Scenes and Prefabs (settings allowing)
+    public static bool FullBake(NavMeshBakerSettings _settings, out string _errorMsg)
     {
+        if(_settings == null)
+        {
+            Debug.LogWarning("WHY");
+            _errorMsg = "WHY";
+            return false;
+        }
+
         _errorMsg = string.Empty;
 
         Scene _activeScene = EditorSceneManager.GetActiveScene();
@@ -18,28 +25,70 @@ public static class NavMeshBaker
         //We run this first because it is the last chance to canel these actions
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
         {
-            _errorMsg = "Couldn't build navmeshes, user cancelled saving operation!";
+            Debug.LogError("[NavMeshBaker] Couldn't build navmeshes, user cancelled saving operation");
+            _errorMsg = "Couldn't build navmeshes, user cancelled saving operation";
             return false;
         }
 
         //We bake prefabs before scenes because scenes can contain prefabs
         //  We do NOT account for recursive prefabs because I don't want to do a topological sort
-        //  Though honestly with how nav meshes work, I don't even think it matters which one is first :P
-        if(!BakePrefabs(_settings, out string _prefabErrorMsg))
+        if (_settings.BakePrefabsOnFullBake)
         {
-            Debug.LogError(_prefabErrorMsg);
+            if(!BakePrefabs(_settings, out string _prefabErrorMsg))
+            {
+                Debug.LogError($"[NavMeshBaker] Failed to Bake Prefabs: {_prefabErrorMsg}");
+
+                if (_settings.StopBakeOnError)
+                {
+                    _errorMsg = $"Failed to Bake Prefabs: {_prefabErrorMsg}";
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("[NavMeshBaker] Skipped Prefabs in Full Bake");
         }
 
-        if(!BakeBuildScenes(_settings, out string _buildScenesErrorMsg))
+        if (_settings.BakeScenesOnFullBake)
         {
-            Debug.LogError(_buildScenesErrorMsg);
+            if (_settings.BakeOnlyBuildListScenes)
+            {
+                if(!BakeBuildScenes(_settings, out string _buildScenesErrorMsg))
+                {
+                    Debug.LogError($"[NavMeshBaker] Failed to Bake Build Scenes: {_buildScenesErrorMsg}");
+
+                    if (_settings.StopBakeOnError)
+                    {
+                        _errorMsg = $"Failed to Bake Build Scenes: {_buildScenesErrorMsg}";
+                        return false;
+                    }
+                }
+            }
+            else
+            {
+                if (!BakeAllScenes(_settings, out string _buildScenesErrorMsg))
+                {
+                    Debug.LogError($"[NavMeshBaker] Failed to Bake All Scenes: {_buildScenesErrorMsg}");
+
+                    if (_settings.StopBakeOnError)
+                    {
+                        _errorMsg = $"Failed to Bake All Scenes: {_buildScenesErrorMsg}";
+                        return false;
+                    }
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("[NavMeshBaker] Skipped Scenes in Full Bake");
         }
 
         //Reopen initial active scene
         Scene _reOpenedInitialScene = EditorSceneManager.OpenScene(_activeScenePath, OpenSceneMode.Single);
         if (!_reOpenedInitialScene.IsValid())
         {
-            Debug.LogWarning($"Couldn't reopen initial active scene!");
+            Debug.LogWarning($"[NavMeshBaker] Couldn't reopen initial active scene!");
         }
 
         return true;
@@ -52,12 +101,18 @@ public static class NavMeshBaker
         //Bake meshes for scenes
         foreach (EditorBuildSettingsScene _sceneInfo in EditorBuildSettings.scenes)
         {
-            //Ignore scenes not in build
-            if (_sceneInfo.enabled)
+            //Only bake scenes that go in the build unless the settings say to build them all
+            if (!_settings.BakeOnlyEnabledBuildListScenes || _sceneInfo.enabled)
             {
                 if(!BakeScene(_settings, _sceneInfo.path, out string _sceneErrorMsg))
                 {
-                    //TODO: Handle errors
+                    Debug.LogError($"[NavMeshBaker] Could not bake Scene {_sceneInfo.path}: {_sceneErrorMsg}");
+
+                    if (_settings.StopBakeOnError)
+                    {
+                        _errorMsg = $"Could not bake Scene {_sceneInfo.path}: {_sceneErrorMsg}";
+                        return false;
+                    }
                 }
             }
         }
@@ -69,6 +124,7 @@ public static class NavMeshBaker
     {
         _errorMsg = string.Empty;
         //TODO: This
+        //Get the list, then call BakeScenes(...)
         return true;
     }
 
@@ -80,7 +136,13 @@ public static class NavMeshBaker
         {
             if(!BakeScene(_settings, _scenePath, out string _sceneErrorMsg))
             {
-                //TODO: Handle errors
+                Debug.LogError($"[NavMeshBaker] Error while baking scene [{_scenePath}]: {_sceneErrorMsg}");
+
+                if (_settings.StopBakeOnError)
+                {
+                    _errorMsg = $"Error while baking scene [{_scenePath}]: {_sceneErrorMsg}";
+                    return false;
+                }
             }
         }
 
@@ -93,12 +155,24 @@ public static class NavMeshBaker
 
         Scene _newScene = EditorSceneManager.OpenScene(_scenePath, OpenSceneMode.Single);
 
-        int _numNavMeshesBuilt = BuildNavMeshes(_settings, _scenePath, _newScene.GetRootGameObjects());
-        Debug.Log($"Built {_numNavMeshesBuilt} navmeshes in Scene {_newScene.name}");
+        int _numNavMeshesBuilt = BuildNavMeshes(_settings, _scenePath, _newScene.GetRootGameObjects(), out string _buildErrorMsg);
+        Debug.Log($"[NavMeshBaker] Built {_numNavMeshesBuilt} navmeshes in Scene {_newScene.name}");
+        if (_buildErrorMsg != string.Empty)
+        {
+            Debug.LogError($"[NavMeshBaker] Exited building in Prefab {_newScene.name} early: {_buildErrorMsg}");
+            _errorMsg = $"Exited building in Prefab {_newScene.name} early: {_buildErrorMsg}";
+            return false;
+        }
 
         if (!EditorSceneManager.SaveScene(_newScene))
         {
-            Debug.LogError($"Couldn't save changes to {_newScene.name} ({_newScene.path}");
+            Debug.LogError($"[NavMeshBaker] Couldn't save changes to {_newScene.name} ({_newScene.path})");
+
+            if (_settings.StopBakeOnError)
+            {
+                _errorMsg = $"Couldn't save changes to {_newScene.name} ({_newScene.path})";
+                return false;
+            }
         }
 
         return true;
@@ -115,15 +189,27 @@ public static class NavMeshBaker
             string _prefabAssetPath = AssetDatabase.GUIDToAssetPath(_prefabGuid);
             GameObject _prefab = PrefabUtility.LoadPrefabContents(_prefabAssetPath);
 
-            int _numNavMeshesBuilt = BuildNavMeshes(_settings, _prefabAssetPath, _prefab);
-            Debug.Log($"Built {_numNavMeshesBuilt} in Prefab {_prefab.name} ({_prefabAssetPath})");
+            int _numNavMeshesBuilt = BuildNavMeshes(_settings, _prefabAssetPath, _prefab, out string _buildErrorMsg);
+            Debug.Log($"[NavMeshBaker] Built {_numNavMeshesBuilt} in Prefab {_prefab.name} ({_prefabAssetPath})");
+            if(_buildErrorMsg != string.Empty)
+            {
+                Debug.LogError($"[NavMeshBaker] Exited building in Prefab {_prefab.name} ({_prefabAssetPath}) early: {_buildErrorMsg}");
+                _errorMsg = $"Exited building in Prefab {_prefab.name} ({_prefabAssetPath}) early: {_buildErrorMsg}";
+                return false;
+            }
 
             //Save nav mesh to prefab
             PrefabUtility.SaveAsPrefabAsset(_prefab, _prefabAssetPath, out bool _savedSuccessfully);
             //PrefabUtility.SaveAsPrefabAsset(_prefab, _prefabPath, out bool _savedSuccessfully);
             if (!_savedSuccessfully)
             {
-                Debug.LogError($"Failed to save changes to prefab {_prefab.name} ({_prefabAssetPath})");
+                Debug.LogError($"[NavMeshBaker] Failed to save changes to prefab {_prefab.name} ({_prefabAssetPath})");
+
+                if (_settings.StopBakeOnError)
+                {
+                    _errorMsg = $"Failed to save changes to prefab {_prefab.name} ({_prefabAssetPath})";
+                    return false;
+                }
             }
 
             //Clean up memory
@@ -135,7 +221,7 @@ public static class NavMeshBaker
 
     public static NavMeshSurface[] FindNavMeshSurfaces(NavMeshBakerSettings _settings, GameObject _rootGameObject)
     {
-        return _rootGameObject.GetComponentsInChildren<NavMeshSurface>();
+        return _rootGameObject.GetComponentsInChildren<NavMeshSurface>((_settings.BakeNavMeshSurfacesOnInactiveObjects || _settings.BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive));
     }
 
     public static NavMeshSurface[] FindNavMeshSurfaces(NavMeshBakerSettings _settings, GameObject[] _rootGameObjects)
@@ -149,24 +235,47 @@ public static class NavMeshBaker
         return _navMeshSurfaces.ToArray();
     }
 
-    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, NavMeshSurface[] _navMeshSurfaces)
+    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, NavMeshSurface[] _navMeshSurfaces, out string _errorMsg)
     {
+        _errorMsg = "";
+
         int _numNavMeshesBuilt = 0;
         foreach (NavMeshSurface _navMeshSurface in _navMeshSurfaces)
         {
+            //Check if the we can bake this surface based on its parent's active status
+            //  I could DeMorgan's this, but it's more clear this way
+            if(!(_navMeshSurface.gameObject.activeInHierarchy ||
+                _settings.BakeNavMeshSurfacesOnInactiveObjects ||
+                (_settings.BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive && _navMeshSurface.gameObject.activeSelf)))
+            {
+                //Current settings say we can't bake this NavMeshSurface
+                continue;
+            }
+
+            //Check if we can bake this surface based on the componen'ts active status
+            if(!(_navMeshSurface.enabled || _settings.BakeInactiveNavMeshSurfaceComponents))
+            {
+                //Current settings say we can't bake this NavMeshSurface
+                continue;
+            }
+
             string _navMeshDataPath;
             bool _hasExistingNavMesh;
+
+            string _assetExtension = Path.GetExtension(_rootAssetPath);
+            bool _isPrefabAsset = _assetExtension.ToLower() == ".prefab";
+
             if (_navMeshSurface.navMeshData == null)
             {
                 _hasExistingNavMesh = false;
 
                 string _assetFolder = Path.GetDirectoryName(_rootAssetPath);
                 string _assetName = Path.GetFileNameWithoutExtension(_rootAssetPath);
-                string _assetExtension = Path.GetExtension(_rootAssetPath);
+                //string _assetExtension = Path.GetExtension(_rootAssetPath);
 
-                if (_assetExtension.ToLower() == ".prefab")
+                if (_isPrefabAsset && !_settings.ForcePrefabBakeIntoFolder)
                 {
-                    //If we're a prefab, we don't put this in a folder
+                    //If we're a prefab, and handling prefabs like vanilla NavMesh, we don't put this in a folder
                     _navMeshDataPath = _assetFolder + $"/NavMesh-";
                 }
                 else
@@ -182,6 +291,12 @@ public static class NavMeshBaker
             }
             else
             {
+                //Since this NavMeshSurface already has a mesh, we should skip it if the setting is true
+                if (_settings.OnlyBakeMissingNavMeshes)
+                {
+                    continue;
+                }
+
                 _hasExistingNavMesh = true;
 
                 _navMeshDataPath = AssetDatabase.GetAssetPath(_navMeshSurface.navMeshData);
@@ -189,10 +304,40 @@ public static class NavMeshBaker
 
             if (_navMeshDataPath == string.Empty)
             {
-                Debug.LogError($"Couldn't get nav mesh data asset path!");
+                Debug.LogError($"[NavMeshBaker] Couldn't get nav mesh data asset path!");
                 continue;
             }
 
+            //Check if we've got a prefab
+            //  Can't reuse _isPrefabAsset because scenes can have prefab instances
+            bool _isPartOfPrefabInstance = PrefabUtility.IsPartOfPrefabInstance(_navMeshSurface);
+            //If we're part of a prefab and not a prefab asset and we shouldn't bake prefab instances in scenes, skip!
+            if (_isPartOfPrefabInstance && !_isPrefabAsset && !_settings.BakePrefabInstancesInScenes)
+            {
+                continue;
+            }
+
+            //If we're part of a prefab and not a prefab asset and we shouldn bake prefab instances in scenes:
+            //  If override is true, always bake
+            //  If override is false, bake only if the mesh has no data
+            if (_isPartOfPrefabInstance && !_isPrefabAsset && (!_settings.OverrideExistingPrefabInstanceBakesInScenes && _navMeshSurface.navMeshData != null))
+            {
+                continue;
+            }
+
+            //If we're a nested prefab instance, we might not want to bake. Check!
+            if (_isPartOfPrefabInstance && _settings.IgnoreNavMeshSurfacesInNestedPrefabInstances)
+            {
+                //If the root of this prefab instance's parent is part of a prefab or prefab instance, that means it's nested, and we shouldn't bake it
+                GameObject _prefabRoot = PrefabUtility.GetNearestPrefabInstanceRoot(_navMeshSurface.gameObject);
+                if (_prefabRoot.transform.parent != null && PrefabUtility.IsPartOfAnyPrefab(_prefabRoot.transform.parent))
+                {
+                    continue;
+                }
+            }
+
+            if(_isPartOfPrefabInstance && !_isPartOfPrefabInstance)
+            //Bake our breand new navmesh!
             _navMeshSurface.BuildNavMesh();
 
             if (_navMeshSurface.navMeshData != null)
@@ -201,11 +346,11 @@ public static class NavMeshBaker
                 string _newAssetPath = _hasExistingNavMesh ? _navMeshDataPath : _navMeshDataPath + $"{_navMeshSurface.name}.asset";
                 AssetDatabase.CreateAsset(_navMeshSurface.navMeshData, _newAssetPath);
 
-                //We've got a prefab!
-                if (PrefabUtility.IsPartOfPrefabInstance(_navMeshSurface))
+                //Prefabs need special handling
+                if (_isPartOfPrefabInstance)
                 {
                     //Prefab instances don't like to save, so we do this to save to individual instances
-                    //  This behavior does make them a bit easier to ignore if we want though :)
+                    //  This behavior does make them a bit easier to ignore if we want though, as seen right above the bake itself
                     EditorUtility.SetDirty(_navMeshSurface);
                     PrefabUtility.RecordPrefabInstancePropertyModifications(_navMeshSurface);
                 }
@@ -215,22 +360,28 @@ public static class NavMeshBaker
             }
             else
             {
-                Debug.LogError($"Failed to build nav mesh for {_navMeshSurface.name} ({_rootAssetPath})!");
+                Debug.LogError($"[NavMeshBaker] Failed to build nav mesh for {_navMeshSurface.name} ({_rootAssetPath})");
+
+                if (_settings.StopBakeOnError)
+                {
+                    _errorMsg = $"Failed to build nav mesh for {_navMeshSurface.name} ({_rootAssetPath})";
+                    return _numNavMeshesBuilt;
+                }
             }
         }
 
         return _numNavMeshesBuilt;
     }
 
-    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, GameObject _rootGameObject)
+    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, GameObject _rootGameObject, out string _errorMsg)
     {
         NavMeshSurface[] _navMeshSurfaces = FindNavMeshSurfaces(_settings, _rootGameObject);
-        return BuildNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces);
+        return BuildNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces, out _errorMsg);
     }
 
-    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, GameObject[] _rootGameObjects)
+    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, GameObject[] _rootGameObjects, out string _errorMsg)
     {
         NavMeshSurface[] _navMeshSurfaces = FindNavMeshSurfaces(_settings, _rootGameObjects);
-        return BuildNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces);
+        return BuildNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces, out _errorMsg);
     }
 }

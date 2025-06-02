@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: NavMeshBakerSettings
   m_EditorClassIdentifier: 
   BakeOnBuild: 1
-  BakeScenesOnFullBuild: 1
-  BakePrefabsOnFullBuild: 1
+  BakeScenesOnFullBake: 1
+  BakePrefabsOnFullBake: 1
   OnlyBakeMissingNavMeshes: 0
-  StopBakeOnAssetSaveFailure: 1
+  StopBakeOnError: 1
   BakeNavMeshSurfacesOnInactiveObjects: 0
   BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive: 1
   BakeInactiveNavMeshSurfaceComponents: 0
@@ -25,4 +25,4 @@ MonoBehaviour:
   BakePrefabInstancesInScenes: 0
   OverrideExistingPrefabInstanceBakesInScenes: 1
   ForcePrefabBakeIntoFolder: 1
-  IgnoreNavMeshSurfacesInPrefabInstancesInPrefabs: 1
+  IgnoreNavMeshSurfacesInNestedPrefabInstances: 1
