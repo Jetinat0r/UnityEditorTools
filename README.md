@@ -9,10 +9,21 @@ Credit is appreciated, but not required. If you use any of these tools in a proj
 ## NavMeshBaker
 NavMeshBaker is a helper tool to improve ease of use for Unity's NavMeshSurfaces.
 
+![Image of NavMeshBaker all windows](./Assets/NavMeshBakerResources/ReadmeAssets/NavMeshBakerAllWindows.png)
+
 ### Features:
 - Bake all NavMeshSurfaces in Scenes
 - Bake all NavMeshSurfaces in Prefabs
 - Bake NavMeshSurfaces on build
 - Bake current open Scene/Prefab
 
-[Image of NavMeshBaker all windows](./Assets/NavMeshBakerResources/ReadmeAssets/NavMeshBakerAllWindows.png)
+The NavMeshBaker Window can be accessed from "Tools->NavMeshBakerWindow" in the Menu bar
+
+The NavMeshBaker settings can be found in "Edit->Project Settings"
+
+By default, NavMeshBaker will bake NavMeshSurfaces when the project is built. This can be disabled in the settings.
+
+### Install:
+Download the "Assets/Editor/NavMeshBaker" folder, and place it in "Assets/Editor" in your own project.
+
+NOTE: The NavMeshBaker scripts MUST be part of an "Editor" folder, or they will break your build!
