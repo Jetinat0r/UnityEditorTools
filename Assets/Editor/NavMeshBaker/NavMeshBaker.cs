@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using Unity.AI.Navigation;
 using System.IO;
+using System.Runtime.InteropServices;
 
 public static class NavMeshBaker
 {
@@ -20,6 +21,8 @@ public static class NavMeshBaker
 
         _errorMsg = string.Empty;
 
+        PrefabStage _currentOpenPrefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+        string _currentOpenPrefabPath = _currentOpenPrefabStage != null ? _currentOpenPrefabStage.assetPath : string.Empty;
         Scene _activeScene = EditorSceneManager.GetActiveScene();
         string _activeScenePath = _activeScene.path;
         //We run this first because it is the last chance to canel these actions
@@ -84,12 +87,34 @@ public static class NavMeshBaker
             Debug.Log("[NavMeshBaker] Skipped Scenes in Full Bake");
         }
 
+        //NOTE: I believe this does not need to be done because building inherently reloads scenes properly
+        //Before we can reopen our initial active scene, we have to open up a new one to ensure a clean reload
+        //EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        
         //Reopen initial active scene
         Scene _reOpenedInitialScene = EditorSceneManager.OpenScene(_activeScenePath, OpenSceneMode.Single);
         if (!_reOpenedInitialScene.IsValid())
         {
             Debug.LogWarning($"[NavMeshBaker] Couldn't reopen initial active scene!");
         }
+
+        //NOTE: This does not seem to work. I imagine it has something to do with how builds work
+        //      interfering with these operations
+        //NOTE: Normal builds also experience this issue, where building kicks you out of prefab view.
+        //      I believe that is "intended" behavior from Unity >:(
+        //Reopen initial active scene and prefab, if applicable
+        /*
+        if (_currentOpenPrefabPath != string.Empty)
+        {
+            //EditorSceneManager.OpenScene(_currentOpenPrefabPath);
+            PrefabStageUtility.OpenPrefab(_currentOpenPrefabPath);
+
+            if(PrefabStageUtility.GetCurrentPrefabStage() == null)
+            {
+                Debug.LogWarning($"[NavMeshBaker] Couldn't reopen initial active prefab!");
+            }
+        }
+        */
 
         return true;
     }
@@ -249,6 +274,53 @@ public static class NavMeshBaker
         return true;
     }
 
+    //Determines if a prefab or scene is open, and bakes accordingly
+    public static bool BakeOpenView(NavMeshBakerSettings _settings, out string _errorMsg)
+    {
+        _errorMsg = string.Empty;
+
+        if(PrefabStageUtility.GetCurrentPrefabStage() != null)
+        {
+            return BakeOpenPrefab(_settings, out _errorMsg);
+        }
+        else
+        {
+            return BakeOpenScene(_settings, out _errorMsg);
+        }
+    }
+
+    //Bakes the currently open and focused scene
+    public static bool BakeOpenScene(NavMeshBakerSettings _settings, out string _errorMsg)
+    {
+        _errorMsg = string.Empty;
+
+        Scene _openScene = EditorSceneManager.GetActiveScene();
+
+        int _numNavMeshesBuilt = BuildNavMeshes(_settings, _openScene.path, _openScene.GetRootGameObjects(), out string _buildErrorMsg);
+        Debug.Log($"[NavMeshBaker] Built {_numNavMeshesBuilt} navmeshes in Scene {_openScene.name}");
+        if (_buildErrorMsg != string.Empty)
+        {
+            Debug.LogError($"[NavMeshBaker] Exited building in Prefab {_openScene.name} early: {_buildErrorMsg}");
+            _errorMsg = $"Exited building in Prefab {_openScene.name} early: {_buildErrorMsg}";
+            return false;
+        }
+
+        if (!EditorSceneManager.SaveScene(_openScene))
+        {
+            Debug.LogError($"[NavMeshBaker] Couldn't save changes to {_openScene.name} ({_openScene.path})");
+
+            if (_settings.StopBakeOnError)
+            {
+                _errorMsg = $"Couldn't save changes to {_openScene.name} ({_openScene.path})";
+                return false;
+            }
+        }
+
+        EditorSceneManager.OpenScene(_openScene.path, OpenSceneMode.Single);
+
+        return true;
+    }
+
     public static bool BakePrefabs(NavMeshBakerSettings _settings, out string _errorMsg)
     {
         _errorMsg = string.Empty;
@@ -260,7 +332,7 @@ public static class NavMeshBaker
             string _prefabAssetPath = AssetDatabase.GUIDToAssetPath(_prefabGuid);
             GameObject _prefab = PrefabUtility.LoadPrefabContents(_prefabAssetPath);
 
-            int _numNavMeshesBuilt = BuildNavMeshes(_settings, _prefabAssetPath, _prefab, out string _buildErrorMsg);
+            int _numNavMeshesBuilt = BakeNavMeshes(_settings, _prefabAssetPath, _prefab, out string _buildErrorMsg);
             Debug.Log($"[NavMeshBaker] Built {_numNavMeshesBuilt} in Prefab {_prefab.name} ({_prefabAssetPath})");
             if(_buildErrorMsg != string.Empty)
             {
@@ -290,6 +362,80 @@ public static class NavMeshBaker
         return true;
     }
 
+    //Bakes the currently open and focused prefab
+    public static bool BakeOpenPrefab(NavMeshBakerSettings _settings, out string _errorMsg)
+    {
+        _errorMsg = string.Empty;
+
+        Scene _openScene = EditorSceneManager.GetActiveScene();
+        string _openScenePath = _openScene.path;
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+        {
+            //I genuinely have no idea why it won't just let me modify the prefab, but you *have* to reload
+            //  the scene to see the changes in prefab instances; otherwise it looks like it failed!
+            //  Since we have to reload the scene, we have to save it first or face data loss
+            Debug.LogError($"[NavMeshBaker] Couldn't save changes to {_openScene.name} ({_openScenePath}). Can't safely continue bake operation without data loss!");
+
+            if (_settings.StopBakeOnError)
+            {
+                _errorMsg = $"Couldn't save changes to {_openScene.name} ({_openScenePath}). Can't safely continue bake operation without data loss!";
+                return false;
+            }
+        }
+
+        PrefabStage _prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
+        if( _prefabStage == null)
+        {
+            Debug.LogError($"[NavMeshBaker] No currently open Prefab to bake");
+            _errorMsg = $"No currently open Prefab to bake";
+            return false;
+        }
+        GameObject _prefabRoot = _prefabStage.prefabContentsRoot;
+        string _prefabAssetPath = _prefabStage.assetPath;
+
+        StageUtility.GoBackToPreviousStage();
+        GameObject _prefab = PrefabUtility.LoadPrefabContents(_prefabAssetPath);
+
+        int _numNavMeshesBuilt = BakeNavMeshes(_settings, _prefabAssetPath, _prefab, out string _buildErrorMsg);
+        Debug.Log($"[NavMeshBaker] Built {_numNavMeshesBuilt} in Prefab {_prefab.name} ({_prefabAssetPath})");
+        if (_buildErrorMsg != string.Empty)
+        {
+            Debug.LogError($"[NavMeshBaker] Exited building in Prefab {_prefab.name} ({_prefabAssetPath}) early: {_buildErrorMsg}");
+            _errorMsg = $"Exited building in Prefab {_prefab.name} ({_prefabAssetPath}) early: {_buildErrorMsg}";
+            return false;
+        }
+
+        //Save nav mesh to prefab
+        PrefabUtility.SaveAsPrefabAsset(_prefab, _prefabAssetPath, out bool _savedSuccessfully);
+        //PrefabUtility.SaveAsPrefabAsset(_prefab, _prefabPath, out bool _savedSuccessfully);
+        if (!_savedSuccessfully)
+        {
+            Debug.LogError($"[NavMeshBaker] Failed to save changes to prefab {_prefab.name} ({_prefabAssetPath})");
+
+            if (_settings.StopBakeOnError)
+            {
+                _errorMsg = $"Failed to save changes to prefab {_prefab.name} ({_prefabAssetPath})";
+                return false;
+            }
+        }
+
+        //Clean up memory
+        PrefabUtility.UnloadPrefabContents(_prefab);
+        //PrefabUtility.UnloadPrefabContents(_prefabRoot);
+
+        //In a frustrating turn of events, you have to reload the active scene to immediately see changes in the prefab
+        //  But to reload the scene fully, you have to open a different one
+        //  And we still want to reopen the prefab of course
+        EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+        if(_openScenePath != string.Empty)
+        {
+            EditorSceneManager.OpenScene(_openScenePath, OpenSceneMode.Single);
+        }
+        PrefabStageUtility.OpenPrefab(_prefabAssetPath);
+
+        return true;
+    }
+
     public static NavMeshSurface[] FindNavMeshSurfaces(NavMeshBakerSettings _settings, GameObject _rootGameObject)
     {
         return _rootGameObject.GetComponentsInChildren<NavMeshSurface>((_settings.BakeNavMeshSurfacesOnInactiveObjects || _settings.BakeNavMeshSurfacesOnInactiveObjectsIfSelfIsActive));
@@ -306,7 +452,7 @@ public static class NavMeshBaker
         return _navMeshSurfaces.ToArray();
     }
 
-    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, NavMeshSurface[] _navMeshSurfaces, out string _errorMsg)
+    public static int BakeNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, NavMeshSurface[] _navMeshSurfaces, out string _errorMsg)
     {
         _errorMsg = "";
 
@@ -416,6 +562,9 @@ public static class NavMeshBaker
                 string _newAssetPath = _hasExistingNavMesh ? _navMeshDataPath : _navMeshDataPath + $"{_navMeshSurface.name}.asset";
                 AssetDatabase.CreateAsset(_navMeshSurface.navMeshData, _newAssetPath);
 
+                //The below line doesn't seem to be necessary
+                //_navMeshSurface.navMeshData = AssetDatabase.LoadAssetAtPath<NavMeshData>(_newAssetPath);
+
                 //Prefabs need special handling
                 if (_isPartOfPrefabInstance)
                 {
@@ -424,8 +573,6 @@ public static class NavMeshBaker
                     EditorUtility.SetDirty(_navMeshSurface);
                     PrefabUtility.RecordPrefabInstancePropertyModifications(_navMeshSurface);
                 }
-                //The below line doesn't seem to be necessary
-                //_navMeshSurface.navMeshData = AssetDatabase.LoadAssetAtPath<NavMeshData>(_newAssetPath);
                 _numNavMeshesBuilt++;
             }
             else
@@ -443,15 +590,15 @@ public static class NavMeshBaker
         return _numNavMeshesBuilt;
     }
 
-    public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, GameObject _rootGameObject, out string _errorMsg)
+    public static int BakeNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, GameObject _rootGameObject, out string _errorMsg)
     {
         NavMeshSurface[] _navMeshSurfaces = FindNavMeshSurfaces(_settings, _rootGameObject);
-        return BuildNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces, out _errorMsg);
+        return BakeNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces, out _errorMsg);
     }
 
     public static int BuildNavMeshes(NavMeshBakerSettings _settings, string _rootAssetPath, GameObject[] _rootGameObjects, out string _errorMsg)
     {
         NavMeshSurface[] _navMeshSurfaces = FindNavMeshSurfaces(_settings, _rootGameObjects);
-        return BuildNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces, out _errorMsg);
+        return BakeNavMeshes(_settings, _rootAssetPath, _navMeshSurfaces, out _errorMsg);
     }
 }

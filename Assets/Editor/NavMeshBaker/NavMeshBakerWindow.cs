@@ -1,24 +1,28 @@
 using UnityEngine;
 using UnityEditor;
+using System;
 
 public class NavMeshBakerWindow : EditorWindow
 {
-    [MenuItem("Tools/GlobalNavMeshBakerWindow")]
+    [MenuItem("Tools/NavMeshBakerWindow")]
     public static void ShowWindow()
     {
-        GetWindow<NavMeshBakerWindow>("GlobalNavMeshBakerWindow");
+        GetWindow<NavMeshBakerWindow>("NavMeshBakerWindow");
     }
 
     private void OnGUI()
     {
-        GUILayout.Label("Bake Settings");
-        //GUILayout.Toggle(,);
-
-        if(GUILayout.Button("Bake All Nav Meshes"))
+        GUILayout.Label("Edit Settings for Bake");
+        if (GUILayout.Button("Open Settings"))
         {
-            Debug.Log("Pressed!");
-            
+            SettingsService.OpenProjectSettings("Project/NavMeshBaker");
         }
 
+        EditorGUILayout.Space();
+        GUILayout.Label("Bake in Current Scene/Prefab");
+        if (GUILayout.Button("Bake Current View"))
+        {
+            NavMeshBaker.BakeOpenView((NavMeshBakerSettings)NavMeshBakerSettings.GetOrCreateSerializedSettings().targetObject, out string _sceneError);
+        }
     }
 }
