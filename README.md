@@ -23,6 +23,8 @@ The NavMeshBaker settings can be found in "Edit->Project Settings"
 
 By default, NavMeshBaker will bake NavMeshSurfaces when the project is built. This can be disabled in the settings.
 
+**Dissatisfied with my windows?** The NavMeshBaker class is *completely* public and static, so you can call those functions from your own scripts!
+
 ### Install:
 Download the "Assets/Editor/NavMeshBaker" folder, and place it in "Assets/Editor" in your own project.
 
