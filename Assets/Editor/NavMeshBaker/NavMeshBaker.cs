@@ -14,8 +14,8 @@ public static class NavMeshBaker
     {
         if(_settings == null)
         {
-            Debug.LogWarning("WHY");
-            _errorMsg = "WHY";
+            Debug.LogError("[NavMeshBaker] Missing settings");
+            _errorMsg = "Missing settings";
             return false;
         }
 
